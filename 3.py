@@ -141,31 +141,61 @@ class Bullet(pygame.sprite.Sprite):
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
+        self.hp = 1
         self.image = pygame.Surface((40, 40))
         self.image.fill(RED)  # Изменяем цвет врага на красный
         self.rect = self.image.get_rect(center=(x, y))
+        self.speed = ENEMY_SPEED
+
+    def kills(self, hit):
+        if hit:
+            self.hp -= 1
+        if self.hp <= 0:
+            self.kill()
+            kill_sound = pygame.mixer.Sound("kill_sound.wav")
+            kill_sound.play()  # Воспроизводим звук убийства
+            return 1
+        return 0
 
     def update(self, player, obstacles):
         original_position = self.rect.topleft
 
         if player.rect.x < self.rect.x:
-            self.rect.x -= ENEMY_SPEED
+            self.rect.x -= self.speed
             if pygame.sprite.spritecollideany(self, obstacles):
                 self.rect.x = original_position[0]
         elif player.rect.x > self.rect.x:
-            self.rect.x += ENEMY_SPEED
+            self.rect.x += self.speed
             if pygame.sprite.spritecollideany(self, obstacles):
                 self.rect.x = original_position[0]
 
         if player.rect.y < self.rect.y:
-            self.rect.y -= ENEMY_SPEED
+            self.rect.y -= self.speed
             if pygame.sprite.spritecollideany(self, obstacles):
                 self.rect.y = original_position[1]
         elif player.rect.y > self.rect.y:
-            self.rect.y += ENEMY_SPEED
+            self.rect.y += self.speed
             if pygame.sprite.spritecollideany(self, obstacles):
                 self.rect.y = original_position[1]
 
+
+class Fat_enemy(Enemy):
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.hp = 3
+        self.image = pygame.Surface((60, 60))
+        self.image.fill(YELLOW)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = ENEMY_SPEED // 2
+
+class Fast_enemy(Enemy):
+    def __init__(self, x, y):
+        super().__init__(x, y)
+        self.hp = 1
+        self.image = pygame.Surface((30, 30))
+        self.image.fill(GREEN)
+        self.rect = self.image.get_rect(center=(x, y))
+        self.speed = ENEMY_SPEED * 2
 
 # Класс препятствия
 class Obstacle(pygame.sprite.Sprite):
@@ -202,7 +232,7 @@ def show_menu(screen):
 
 
 # Функция для спавна врагов
-def spawn_enemy(enemies):
+def spawn_enemy(enemies, type_en=Enemy):
     side = random.choice(['top', 'bottom', 'left', 'right'])
     if side == 'top':
         x = random.randint(0, WIDTH)
@@ -216,8 +246,7 @@ def spawn_enemy(enemies):
     else:  # side == 'right'
         x = WIDTH
         y = random.randint(0, HEIGHT)
-
-    enemy = Enemy(x, y)
+    enemy = type_en(x, y)
     enemies.add(enemy)
 
 
@@ -232,7 +261,6 @@ def main():
     pygame.mixer.music.play(-1)  # Зацикливаем музыку
 
     # Загрузка звукового эффекта для убийства врага
-    kill_sound = pygame.mixer.Sound("kill_sound.wav")  # Убедитесь, что файл находится в той же папке
 
     show_menu(screen)  # Показать меню перед началом игры
 
@@ -246,7 +274,7 @@ def main():
     kill_count = 0
 
     # Создание препятствий
-    for _ in range(5):  # Создаем 5 препятствий
+    for _ in range(8):  # Создаем 8 препятствий
         width, height = random.randint(50, 100), random.randint(50, 100)
         x = random.randint(0, WIDTH - width)
         y = random.randint(0, HEIGHT - height)
@@ -257,6 +285,12 @@ def main():
     spawn_timer = pygame.USEREVENT + 1
     pygame.time.set_timer(spawn_timer, SPAWN_RATE)
 
+    spawn_timer_fat = pygame.USEREVENT + 2
+    pygame.time.set_timer(spawn_timer_fat, SPAWN_RATE * 3)
+
+    spawn_timer_fast = pygame.USEREVENT + 3
+    pygame.time.set_timer(spawn_timer_fast, SPAWN_RATE * 4)
+    Fast_enemy
     running = True
     while running:
         for event in pygame.event.get():
@@ -265,8 +299,15 @@ def main():
                     running = False
             if event.type == pygame.QUIT:
                 running = False
+            # спавн врагов
             if event.type == spawn_timer:
-                spawn_enemy(enemies)  # Добавлено: вызов функции спавна врагов
+                spawn_enemy(enemies)
+            if event.type == spawn_timer_fat:
+                spawn_enemy(enemies, Fat_enemy)
+            if event.type == spawn_timer_fast:
+                spawn_enemy(enemies, Fast_enemy)
+
+
             if event.type == pygame.MOUSEBUTTONDOWN:  # Проверяем нажатие кнопки мыши
                 if event.button == 1:  # ЛКМ
                     mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -287,11 +328,10 @@ def main():
 
         # Проверка на столкновения между пулями и врагами
         for bullet in bullets:
-            hit_enemies = pygame.sprite.spritecollide(bullet, enemies, True)  # Удаляем врагов при столкновении
-            if hit_enemies:
+            hit_enemies = pygame.sprite.spritecollide(bullet, enemies, False)
+            for enemy in hit_enemies:
+                kill_count += enemy.kills(hit=True)  # убийство врага + пополнение числа убийств
                 bullet.kill()  # Удаляем пулю после столкновения
-                kill_count += len(hit_enemies)  # Увеличиваем счетчик убийств
-                kill_sound.play()  # Воспроизводим звук убийства
 
         # Проверка на столкновения между пулями и препятствиями
         for bullet in bullets:
