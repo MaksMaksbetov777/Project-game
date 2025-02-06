@@ -3,12 +3,13 @@ import sys
 import pygame
 import math
 import random
+from screeninfo import get_monitors
 
 # Инициализация Pygame
 pygame.init()
 
 # Константы
-WIDTH, HEIGHT = 1920, 1080  # Увеличиваем размеры карты
+WIDTH, HEIGHT = get_monitors()[0].width, get_monitors()[0].height  # Увеличиваем размеры карты
 FPS = 75
 PLAYER_SPEED = 5
 BULLET_SPEED = 35
@@ -302,31 +303,10 @@ class Fast_enemy(Enemy):
 class Obstacle(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height):
         super().__init__()
-        self.frames = []
-        self.cut_sheet(load_image("stone_sprite.png"), 1, 1)  # Загрузка спрайтов для анимации
-        self.cur_frame = 0
-        self.image = self.frames[self.cur_frame]
+        self.image = load_image("stone_sprite.png")
         self.rect = self.image.get_rect(topleft=(x, y))
         self.animation_speed = 0.1  # Скорость анимации
         self.animation_timer = 0
-
-    def cut_sheet(self, sheet, columns, rows):
-        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
-                                sheet.get_height() // rows)
-        for j in range(rows):
-            for i in range(columns):
-                frame_location = (self.rect.w * i, self.rect.h * j)
-                self.frames.append(sheet.subsurface(pygame.Rect(
-                    frame_location, self.rect.size)))
-
-    def update(self):
-        # Обновление анимации
-        self.animation_timer += self.animation_speed
-        if self.animation_timer >= 1:  # Каждую секунду переключаем кадр
-            self.cur_frame = (self.cur_frame + 1) % len(self.frames)
-            self.image = self.frames[self.cur_frame]
-            self.animation_timer = 0
-
 
 # Функция для отображения меню
 def show_menu(screen):
@@ -410,7 +390,7 @@ def show_game_over_screen(screen):
 # Основная функция игры
 def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Simple Isaac-like Game")
+    pygame.display.set_caption("cosmo")
     clock = pygame.time.Clock()
 
     show_menu(screen)  # Показать меню перед началом игры
@@ -424,7 +404,6 @@ def main():
     enemies = pygame.sprite.Group()
     obstacles = pygame.sprite.Group()
     enemy_kill_animations = pygame.sprite.Group()  # Группа для анимаций убийства врагов
-
 
     # Загрузка фона игры
     background_game = load_image("background_game.png")  # Загрузка фона игры
@@ -506,11 +485,6 @@ def main():
         if pygame.sprite.spritecollideany(player, enemies):
             if show_game_over_screen(screen):  # Если игрок умирает, показываем экран смерти
                 main()  # Перезапускаем игру
-            running = False  # Завершаем игру при столкновении
-
-        # Проверка на столкновения между игроком и врагами
-        if pygame.sprite.spritecollideany(player, enemies):
-            print("Игрок умер!")  # Здесь можно добавить логику для завершения игры
             running = False  # Завершаем игру при столкновении
 
         # Ограничение движения игрока в пределах экрана
