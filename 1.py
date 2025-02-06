@@ -122,10 +122,23 @@ class Player(pygame.sprite.Sprite):
 class Bullet(pygame.sprite.Sprite):
     def __init__(self, x, y, direction):
         super().__init__()
-        self.image = pygame.Surface((10, 10))
-        self.image.fill(YELLOW)  # Изменяем цвет пули на желтый
+        self.frames = []
+        self.cut_sheet(load_image("bullet_sprite.png"), 1, 1)  # Загрузка спрайтов для анимации
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
         self.rect = self.image.get_rect(center=(x, y))
         self.direction = direction
+        self.animation_speed = 0.1  # Скорость анимации
+        self.animation_timer = 0
+
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
 
     def update(self):
         # Двигаем пулю в направлении, заданном векторами
@@ -135,6 +148,13 @@ class Bullet(pygame.sprite.Sprite):
         # Удаляем пулю, если она выходит за пределы экрана
         if self.rect.bottom < 0 or self.rect.left > WIDTH or self.rect.right < 0 or self.rect.top > HEIGHT:
             self.kill()
+
+        # Обновление анимации
+        self.animation_timer += self.animation_speed
+        if self.animation_timer >= 1:  # Каждую секунду переключаем кадр
+            self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+            self.image = self.frames[self.cur_frame]
+            self.animation_timer = 0
 
 
 # Класс анимации убийства врага
@@ -229,7 +249,7 @@ class Fat_enemy(Enemy):
         super().__init__(x, y)
         self.hp = 3
         self.frames = []
-        self.cut_sheet(load_image("Fatenemy_sprite.png"), 8, 8)  # Загрузка спрайтов для Fat_enemy
+        self.cut_sheet(load_image("Fatenemy_sprite.png"), 1, 1)  # Загрузка спрайтов для Fat_enemy
         self.cur_frame = 0
         self.image = self.frames[self.cur_frame]
         self.rect = self.image.get_rect(center=(x, y))
@@ -282,9 +302,30 @@ class Fast_enemy(Enemy):
 class Obstacle(pygame.sprite.Sprite):
     def __init__(self, x, y, width, height):
         super().__init__()
-        self.image = pygame.Surface((width, height))
-        self.image.fill(BLUE)  # Цвет препятствия
+        self.frames = []
+        self.cut_sheet(load_image("stone_sprite.png"), 1, 1)  # Загрузка спрайтов для анимации
+        self.cur_frame = 0
+        self.image = self.frames[self.cur_frame]
         self.rect = self.image.get_rect(topleft=(x, y))
+        self.animation_speed = 0.1  # Скорость анимации
+        self.animation_timer = 0
+
+    def cut_sheet(self, sheet, columns, rows):
+        self.rect = pygame.Rect(0, 0, sheet.get_width() // columns,
+                                sheet.get_height() // rows)
+        for j in range(rows):
+            for i in range(columns):
+                frame_location = (self.rect.w * i, self.rect.h * j)
+                self.frames.append(sheet.subsurface(pygame.Rect(
+                    frame_location, self.rect.size)))
+
+    def update(self):
+        # Обновление анимации
+        self.animation_timer += self.animation_speed
+        if self.animation_timer >= 1:  # Каждую секунду переключаем кадр
+            self.cur_frame = (self.cur_frame + 1) % len(self.frames)
+            self.image = self.frames[self.cur_frame]
+            self.animation_timer = 0
 
 
 # Функция для отображения меню
@@ -337,6 +378,35 @@ def spawn_enemy(enemies, type_en=Enemy):
     enemies.add(enemy)
 
 
+def show_game_over_screen(screen):
+    font = pygame.font.Font(None, 74)
+    text_surface = font.render("Game Over", True, RED)
+    text_rect = text_surface.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))
+
+    restart_button = Button("Restart", WIDTH // 2 - 100, HEIGHT // 2 + 10, 200, 100)
+    exit_button = Button("Exit", WIDTH // 2 - 100, HEIGHT // 2 + 70, 200, 100)
+
+    while True:
+        screen.fill(BLACK)  # Заливаем экран черным цветом
+        screen.blit(text_surface, text_rect)  # Отображаем текст "Game Over"
+        restart_button.draw(screen)
+        exit_button.draw(screen)
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # ЛКМ
+                    mouse_pos = pygame.mouse.get_pos()
+                    if restart_button.is_hovered(mouse_pos):  # Перезапустить игру
+                        return True
+                    if exit_button.is_hovered(mouse_pos):  # Выйти из игры
+                        pygame.quit()
+                        sys.exit()
+
+
 # Основная функция игры
 def main():
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -354,6 +424,7 @@ def main():
     enemies = pygame.sprite.Group()
     obstacles = pygame.sprite.Group()
     enemy_kill_animations = pygame.sprite.Group()  # Группа для анимаций убийства врагов
+
 
     # Загрузка фона игры
     background_game = load_image("background_game.png")  # Загрузка фона игры
@@ -430,6 +501,12 @@ def main():
         for bullet in bullets:
             if pygame.sprite.spritecollideany(bullet, obstacles):
                 bullet.kill()  # Удаляем пулю при столкновении с препятствием
+
+        # Проверка на столкновения между игроком и врагами
+        if pygame.sprite.spritecollideany(player, enemies):
+            if show_game_over_screen(screen):  # Если игрок умирает, показываем экран смерти
+                main()  # Перезапускаем игру
+            running = False  # Завершаем игру при столкновении
 
         # Проверка на столкновения между игроком и врагами
         if pygame.sprite.spritecollideany(player, enemies):
